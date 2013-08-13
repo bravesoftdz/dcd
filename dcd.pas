@@ -1,67 +1,57 @@
 {******************************************************************************
 *  DCD 2.0a - Outono? de 1993.                                                *
-*            Originalmente desenvolvido numa iniciativa louv vel para acabar  *
+*            Originalmente desenvolvido numa iniciativa louvavel para acabar  *
 *            com a pirataria na velha e boa CompuSystems!                     *
 **---------------------------------------------------------------------------**
 *                                                                             *
 *  Autor              : DELUAN PEREZ                                          *
 *  desenvolvido em    : 08/01/1990                                            *
-*  £ltima atualiza‡„o : Outono? de 1993                                       *
+*  Ultima atualizacao : Outono? de 1993                                       *
 *                                                                             *
 **---------------------------------------------------------------------------**
-*  Hist¢rico de Modifica‡”es:                                                 *
+*  Historico de Modificacoes:                                                 *
 *                                                                             *
 *    11/04/1993 - 2.0, por Deluan Perez                                       *
-*               - Dada uma "geral" no c¢digo! Agora o algoritimo funciona     *
+*               - Dada uma "geral" no codigo! Agora o algoritimo funciona     *
 *                 quase que totalmente igual ao NCD.                          *
 *                                                                             *
 *    08/01/1990 - 1.0, por Deluan Cotts                                       *
-*               - Vers„o inicial                                              *
+*               - Versao inicial                                              *
 ******************************************************************************}
 
 program DCD;
 
-{$M 4096,10000,655360}   { 8312 em 308 diret¢rios no meu disquinho de 320M }
+uses Crt, SysUtils;
 
-uses Crt, Dos{, Memory};
-
-const TREEFILE = '\TREEINFO.DCD';
+const TREEFILE = '.treeinfo.dcd';
 
 type FolhaPtr = ^Folha;
+     PathStr = String;
      Folha = record
                    path : ^PathStr;
                    prx  : FolhaPtr;
              end;
 
 var p      : FolhaPtr;
-    c      : Word;
+    c      : LongInt;
     s, par : String;
     first  : FolhaPtr;
     f      : Text;
     drive  : String[2];
-    atual  : PathStr;
+    atual  : PathStr = '';
     rescan : Boolean;
     notmem : Boolean;
 
 {-----------------------------------------------------------------------------}
 procedure Apresentacao;
-var oldAttr : Byte;
 begin
-     oldAttr := TextAttr;
-     WriteLn;
-     TextColor(White);
-     Write('Deluan Change Directory 2.0');
-     TextAttr := oldAttr;
-     Write(', (c) 1990,93 por Deluan Perez');
-     WriteLn;
+     WriteLn(stderr, 'Deluan Change Directory 2.0 (c) 1990,2013 por Deluan');
 end;
 
 {-----------------------------------------------------------------------------}
 function UpStr(s : String) : String;
-var l : Byte Absolute s;
-    i : Byte;
 begin
-     for i := 1 to l do s[i] := Upcase(s[i]);
+     //for i := 1 to l do s[i] := Upcase(s[i]);
      UpStr := s;
 end;
 
@@ -92,7 +82,8 @@ begin
            p^.prx   := NIL;
            p^.path^ := nivel;
            Inc(c);
-           Write(c:3, #8#8#8);
+           //WriteLn(nivel);
+           Write(stderr, c:10, #8#8#8#8#8#8#8#8#8#8);
         end
         else notmem := TRUE;
      end
@@ -116,17 +107,21 @@ end;
 
 {-----------------------------------------------------------------------------}
 procedure Tree(nivel : PathStr);
-var sr : SearchRec;
+var sr : TSearchRec;
 begin
      if nivel <> '' then Cadastra(nivel)
-     else Cadastra('\');
-     FindFirst(nivel + '\*.*', AnyFile, sr);
-     while (DosError = 0) and not notmem do begin
-           with sr do
-                if ((attr and Directory) > 0) and (name[1] <> '.') then
-                   Tree(nivel + '\' + name);
-	   FindNext(sr);
-     end;
+     else Cadastra('/');
+     if FindFirst(nivel + '/*', faDirectory, sr) = 0 then
+         repeat
+//               writeln(stderr, sr.name, ': ', sr.attr, '&', faDirectory, '=', sr.attr and faDirectory);
+               with sr do begin
+                    if ((attr and faDirectory) = faDirectory) and (name[1] <> '.') then begin
+                       //writeln(stderr, nivel + ' ' + sr.name);
+                       Tree(nivel + '/' + name);
+                    end;
+               end;
+         until FindNext(sr) <> 0;
+     FindClose(sr);
 end;
 
 {-----------------------------------------------------------------------------}
@@ -142,6 +137,11 @@ begin
      Close(f);
 end;
 
+function GetHomePath: String;
+begin
+     GetHomePath := GetEnvironmentVariable('HOME');
+end;
+
 {-----------------------------------------------------------------------------}
 procedure Load;
 var s : String;
@@ -152,25 +152,25 @@ begin
      c      := 0;   {$I-}
      Reset(f);      {$I+}
      if (IoResult > 0) then begin
-        Write('Rescaning Tree ... ');
-        Tree('');
+        Write(stderr, 'Rescaning Tree ... ');
+        Tree(GetHomePath);
         Save;
      end
      else begin
-          Write('Loading Tree ... ');
+          Write(stderr, 'Loading Tree ... ');
           while not Eof(f) do begin
                 ReadLn(f, s);
                 Cadastra(s);
           end;
           Close(f);
      end;
-     Write(#13); ClrEol;
+     Write(stderr, #13); ClrEol;
 end;
 
 {-----------------------------------------------------------------------------}
 function Match(n1, n2 : String; mode : Byte) : Boolean;
 begin
-     n2 := Copy(n2, Posr('\', n2) + 1, 80);
+     n2 := Copy(n2, Posr('/', n2) + 1, 80);
      case mode of
           0 : Match := (n1 = n2);
           1 : Match := (n1 = Copy(n2, 1, Length(n1)));
@@ -182,49 +182,48 @@ function Find(n : String; mode : Integer) : PathStr;
 var pt     : FolhaPtr;
     s      : String;
 begin
-     if (n = '') then Find := ''
-     else begin
-          if mode = 2 then begin
-             repeat
-                   Dec(n[0]);
-                   s := Find(n, 1);
-             until (s <> '') or (n[0] = #0);
-             Find := s;
-          end
-          else begin
-               PosStack(atual);
-               if p = NIL then begin
-                  Erase(f);
-                  Load;
-               end;
-               if not Match(n, atual, mode) then p := first;
-               pt := p;
-               repeat
-                     Next;
-               until Match(n, p^.path^, mode) or (pt = p);
-               if n = '\' then n := '';
-               if not Match(n, p^.path^, mode) then Find := ''
-               else Find := p^.path^;
-          end;
+     if (n = '') then begin
+        Exit('');
      end;
+     if mode = 2 then begin
+       repeat
+             delete(n, length(n), 1);
+             //Dec(n[0]);
+             s := Find(n, 1);
+       until (s <> '') or (length(n) = 0);
+       Exit(s);
+     end;
+
+     PosStack(atual);
+     if p = NIL then begin
+        Erase(f);
+        Load;
+     end;
+     if not Match(n, atual, mode) then p := first;
+     pt := p;
+     repeat
+           Next;
+     until Match(n, p^.path^, mode) or (pt = p);
+     if n = '/' then n := '';
+     if Match(n, p^.path^, mode) then begin
+         Exit(p^.path^);
+     end;
+     Exit('');
 end;
 
-{-----------------------------------------------------------------------------}
-{$F+}  function HeapFunc(size : Word) : Word;  {$F-}
 begin
-     HeapFunc := 1;
-end;
+     TextRec(Output).FlushFunc := TextRec(Output).InOutFunc;
+     TextRec(StdErr).FlushFunc := TextRec(StdErr).InOutFunc;
 
-begin
      DirectVideo := FALSE;
-     Apresentacao;
-     if ParamCount <> 1 then Halt(1);
-     HeapError := @HeapFunc;
+     if ParamCount <> 1 then begin
+        Apresentacao;
+        Halt(1);
+     end;
 
-     WriteLn;
-     Assign(f, TREEFILE);
+     Assign(f, GetHomePath + '/' + TREEFILE);
      par := UpStr(ParamStr(1));
-     rescan := (par = '/R');
+     rescan := (par = '-R');
      if rescan then begin  {$I-}
         Erase(f);          {$I+}
         if IoResult = 0 then;
@@ -233,26 +232,29 @@ begin
      Load;
 
      if notmem then begin
-        WriteLn('N„o h  mem¢ria suficiente para a opera‡„o!');
+        WriteLn(stderr, 'Not enough memory!');
         Halt(1);
      end;
 
      if rescan then Halt;
 
      getDir(0, atual);
-     drive := Copy(atual, 1, 2);
-     Delete(atual, 1, 2);
+     if (atual[2] = ':') then begin
+        drive := Copy(atual, 1, 2);
+        Delete(atual, 1, 2);
+     end;
 
      s := Find(par, 0);
      if s = '' then s := Find(par, 1);
      if s = '' then s := Find(par, 2);
-     if s = '' then WriteLn('Diret¢rio n„o encontrado!')
+     if s = '' then WriteLn(stderr, 'Directory not found!')
      else begin      {$I-}
-          WriteLn('Navegando para: ', drive, s);
+          WriteLn(stderr, s);
+          WriteLn(s);
           ChDir(s);  {$I+}
           if IoResult <> 0 then begin
-             WriteLn('ERRO: Diret¢rio n„o existe: ', drive, s);
-             WriteLn('      Execute ''DCD /R''.');
+             WriteLn(stderr, 'ERROR: Directory does not exist: ', drive, s);
+             WriteLn(stderr, '       Execute ''dcd -r''.');
           end;
      end;
-end.
+end.
