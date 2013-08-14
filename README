@@ -1,3 +1,5 @@
+To install it, add this to your ~/.profile:
+
 dcd ()
 {
         cd "`~/bin/dcd $@`"

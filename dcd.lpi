@@ -30,15 +30,20 @@
     <RunParams>
       <local>
         <FormatVersion Value="1"/>
-        <CommandLineParams Value="-r"/>
+        <CommandLineParams Value="-R"/>
       </local>
     </RunParams>
-    <Units Count="1">
+    <Units Count="2">
       <Unit0>
         <Filename Value="dcd.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="DCD"/>
       </Unit0>
+      <Unit1>
+        <Filename Value="dcdutil.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="DCDUtil"/>
+      </Unit1>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -70,4 +75,4 @@
       </Item3>
     </Exceptions>
   </Debugging>
-</CONFIG>
+</CONFIG>
