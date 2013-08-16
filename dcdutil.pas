@@ -1,20 +1,15 @@
 unit DCDUtil;
 
 {$MODE DELPHI}
-{$H-}
+{$H+}
 
 interface
 
 uses
-  Crt, Classes, StrUtils, SysUtils;
+  Crt, Classes, SysUtils;
 
 const TREEFILE_NAME = '.treeinfo.dcd';
 
-type FolhaPtr = ^Folha;
-     Folha = record
-                   path : String;
-                   prx  : FolhaPtr;
-             end;
 type
 
 { TTreeInfo }
@@ -22,27 +17,27 @@ type
  TTreeInfo = class
  private
    TreeFile: String;
-   RootDIr: String;
+   RootDir: String;
    CurrentDir: String;
-   First: FolhaPtr;
-   Current: FolhaPtr;
-   Count: LongInt;
-   procedure RecurseTree(nivel : AnsiString);
+   FolderList: TStringList;
+   Index: LongInt;
+   procedure RecurseTree(Path : AnsiString);
    function StartSearch(Path: String): Boolean;
    function Next: String;
-   function Match(n1, n2 : String; mode : Byte) : Boolean;
-   function Find(n : String; mode : Integer) : String;
+   function Match(Name, Path : String; mode : Byte) : Boolean;
+   function Find(Name : String; mode : Integer) : String;
  public
    constructor Create(ARootDir: String; ACurrentDir: String);
    procedure Add(path: String);
    procedure Save;
    function Load: Boolean;
    procedure Rescan;
-   function Search(Folder: String): String;
+   function Search(FolderToFind: String): String;
  end;
 
 
 implementation
+
 
 { TTreeInfo }
 
@@ -50,145 +45,118 @@ constructor TTreeInfo.Create(ARootDir: String; ACurrentDir: String);
 begin
      inherited Create;
      RootDir := ARootDir;
-     TreeFile := RootDir + DirectorySeparator + TREEFILE_NAME;
+     ForceDirectories(GetAppConfigDir(false));
+     TreeFile := GetAppConfigDir(false) + DirectorySeparator + TREEFILE_NAME;
      CurrentDir := ACurrentDir;
-     Current := NIL;
-     First := NIL;
-     Count := 0;
+
+     Index := 0;
+     FolderList := TStringList.Create;
+     FolderList.OwnsObjects := True;
 end;
 
-procedure TTreeInfo.RecurseTree(nivel : AnsiString);
+procedure TTreeInfo.RecurseTree(Path : AnsiString);
 var sr : TSearchRec;
 begin
-     if nivel <> '' then begin
-        Add(nivel);
+     if Path <> '' then begin
+        Add(Path);
      end
      else begin
         Add(DirectorySeparator);
      end;
-     if FindFirst(nivel + DirectorySeparator + '*', faDirectory, sr) = 0 then
+     if FindFirst(Path + DirectorySeparator + '*', faDirectory, sr) = 0 then
          repeat
-               //writeln(sr.name, ': ', sr.attr, '&', faDirectory, '=', sr.attr and faDirectory);
-               with sr do begin
-                    if ((attr and faDirectory) = faDirectory) and (Copy(name, 1, 1) <> '.') then begin
-                       //writeln(nivel + ' ' + sr.name);
-                       try
-                          RecurseTree(nivel + DirectorySeparator + name);
-                       except
-                         on E: Exception do
-                         WriteLn(E.Message, ' ------------', nivel + DirectorySeparator + name);
-                       end;
-                    end;
-               end;
+              if ((sr.attr and faDirectory) = faDirectory) and (Copy(sr.name, 1, 1) <> '.') then begin
+                 RecurseTree(Path + DirectorySeparator + sr.name);
+              end;
          until FindNext(sr) <> 0;
      FindClose(sr);
 end;
 
 procedure TTreeInfo.Add(path: String);
-var pt : FolhaPtr;
 begin
-    pt := Current;
-    Current := GetMem(SizeOf(Current^));
-    if Current <> NIL then begin
-      if pt <> NIL then pt^.prx := Current
-      else First := Current;
-      Current^.prx := NIL;
-      Current^.path := path;
-      Inc(Count);
-      Write(stderr, Count:10, #8#8#8#8#8#8#8#8#8#8);
-    end
-    else WriteLn(stderr, '***********FUUUUUUUUUUUUUUUUUUUUU************');
+     FolderList.Add(Path);
+     Write(stderr, FolderList.Count:10, #8#8#8#8#8#8#8#8#8#8);
 end;
 
 function TTreeInfo.Next: String;
 begin
-     Current := Current^.prx;
-     if Current = NIL then Current := First;
-     Result := Current^.path;
+     Inc(Index);
+     if (Index = FolderList.Count) then begin
+       Index := 0;
+     end;
+
+     Result := FolderList[Index];
 end;
 
 procedure TTreeInfo.Save;
-var F: Text;
-    P: FolhaPtr;
 begin
-     P := First;
-     Assign(F, TreeFile);
-     Rewrite(F);
-     while P <> NIL do begin
-           WriteLn(F, P^.path);
-           P := P^.prx;
-     end;
-     P := First;
-     Close(F);
+     FolderList.SaveToFile(TreeFile);
 end;
 
 function TTreeInfo.Load: Boolean;
-var F: Text;
-    S: String;
 begin
-     Current := NIL;
-     First := NIL;
-     Count := 0;
+     FolderList.Clear;
+     Index := 0;
+
      if not FileExists(TreeFile) then begin
         Exit(False);
      end;
-     Assign(F, TreeFile);
-     Reset(F);
-     Write(stderr, 'Loading Tree ... ');
-     while not Eof(F) do begin
-           ReadLn(F, S);
-           Add(S);
-     end;
-     Close(F);
-     Write(stderr, #13); ClrEol;
+
+     FolderList.LoadFromFile(TreeFile);
      Exit(True);
 end;
 
 procedure TTreeInfo.Rescan;
 begin
      Write(stderr, 'Rescaning Tree ... ');
+     FolderList.Clear;
+     Index := 0;
      RecurseTree(RootDir);
+     FolderList.Sort;
      Save;
+     Write(stderr, #13); ClrEol;
 end;
 
 function TTreeInfo.StartSearch(Path: String): Boolean;
+var Pos: Integer;
 begin
-     Current := First;
-     while (Current <> NIL) and (Path <> Current^.path) do
-           Current := Current^.prx;
-     Result := Current <> NIL;
+     if (FolderList.Find(Path, Pos)) then begin
+       Index := Pos;
+       Exit(True);
+     end;
+     Exit(False);
 end;
 
-function TTreeInfo.Search(Folder: String): String;
+function TTreeInfo.Search(FolderToFind: String): String;
 var S: String;
 begin
-     S := Find(Folder, 0);
-     if S = '' then s := Find(Folder, 1);
-     if S = '' then s := Find(Folder, 2);
+     S := Find(FolderToFind, 0);
+     if S = '' then s := Find(FolderToFind, 1);
+     if S = '' then s := Find(FolderToFind, 2);
      Exit(S);
 end;
 
-function TTreeInfo.Match(n1, n2: String; mode: Byte): Boolean;
+function TTreeInfo.Match(Name, Path: String; mode: Byte): Boolean;
 begin
-     n2 := Copy(n2, RPos(DirectorySeparator, n2) + 1, 255);
+     Path := ExtractFileName(Path);
      case mode of
-          0 : Match := (n1 = n2);
-          1 : Match := (n1 = Copy(n2, 1, Length(n1)));
+          0 : Match := (Name = Path);
+          1 : Match := (Name = Copy(Path, 1, Length(Name)));
      end;
 end;
 
-function TTreeInfo.Find(n: String; mode: Integer): String;
-var pt     : FolhaPtr;
-    s      : String;
+function TTreeInfo.Find(Name: String; mode: Integer): String;
+var s      : String;
+    Start: Integer;
 begin
-     if (n = '') then begin
+     if (Name = '') then begin
         Exit('');
      end;
      if mode = 2 then begin
        repeat
-             delete(n, length(n), 1);
-             s := Find(n, 1);
-       until (s <> '') or (length(n) = 0);
+             delete(Name, length(Name), 1);
+             s := Find(Name, 1);
+       until (s <> '') or (length(Name) = 0);
        Exit(s);
      end;
 
@@ -196,15 +164,16 @@ begin
        Rescan;
      end;
 
-     if not Match(n, Current^.path, mode) then Current := First;
-     pt := Current;
+     if not Match(Name, FolderList[Index], mode) then Index := 0;
+     Start := Index;
      repeat
            Next;
-     until Match(n, Current^.path, mode) or (pt = Current);
-     if n = DirectorySeparator then n := '';
-     if Match(n, Current^.path, mode) then begin
-         Exit(Current^.path);
+     until Match(Name, FolderList[Index], mode) or (Start = Index);
+     if Name = DirectorySeparator then Name := '';
+     if Match(Name, FolderList[Index], mode) then begin
+         Exit(FolderList[Index]);
      end;
+
      Exit('');
 end;
 
