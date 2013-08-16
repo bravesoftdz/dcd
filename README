@@ -2,17 +2,15 @@ To install it, add this to your ~/.profile:
 
 dcd ()
 {
-	new_path="$(~/bin/dcd ${@})";
-    if [ -z "${new_path}" ]; then
-        return
-    fi
-
-    if [ -d "${new_path}" ]; then
-        echo -e "\\033[31m${new_path}\\033[0m";
-	   cd "${new_path}";
-    else
-        echo "dcd: directory '${@}' not found";
-        echo "Try \`dcd -r\` to update db.";
-        false;
-    fi
+    new_path="$(~/bin/dcd ${@})";
+    case $? in
+        1 ) return
+            ;;
+        0) echo -e "\\033[31m${new_path}\\033[0m";
+           cd "${new_path}";
+           ;;
+        2) echo "dcd: directory '${@}' not found";
+           echo "Try \`dcd -r\` to update db.";
+           ;;
+    esac
 }

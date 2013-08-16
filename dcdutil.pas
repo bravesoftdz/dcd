@@ -8,7 +8,7 @@ interface
 uses
   Crt, Classes, SysUtils;
 
-const TREEFILE_NAME = '.treeinfo.dcd';
+const TREEFILE_NAME = 'treeinfo.dcd';
 
 type
 
@@ -20,10 +20,7 @@ type
    RootDir: String;
    CurrentDir: String;
    FolderList: TStringList;
-   Index: LongInt;
    procedure RecurseTree(Path : AnsiString);
-   function StartSearch(Path: String): Boolean;
-   function Next: String;
    function Match(Name, Path : String; mode : Byte) : Boolean;
    function Find(Name : String; mode : Integer) : String;
  public
@@ -38,6 +35,10 @@ type
 
 implementation
 
+const
+  MODE_EXACT = 0;
+  MODE_PARTIAL = 1;
+  MODE_BRUTE_FORCE = 2;
 
 { TTreeInfo }
 
@@ -46,10 +47,9 @@ begin
      inherited Create;
      RootDir := ARootDir;
      ForceDirectories(GetAppConfigDir(false));
-     TreeFile := GetAppConfigDir(false) + DirectorySeparator + TREEFILE_NAME;
+     TreeFile := ExcludeTrailingPathDelimiter(GetAppConfigDir(false)) + DirectorySeparator + TREEFILE_NAME;
      CurrentDir := ACurrentDir;
 
-     Index := 0;
      FolderList := TStringList.Create;
      FolderList.OwnsObjects := True;
 end;
@@ -78,25 +78,15 @@ begin
      Write(stderr, FolderList.Count:10, #8#8#8#8#8#8#8#8#8#8);
 end;
 
-function TTreeInfo.Next: String;
-begin
-     Inc(Index);
-     if (Index = FolderList.Count) then begin
-       Index := 0;
-     end;
-
-     Result := FolderList[Index];
-end;
-
 procedure TTreeInfo.Save;
 begin
+     WriteLn(stderr, 'Saving db to ' + TreeFile);
      FolderList.SaveToFile(TreeFile);
 end;
 
 function TTreeInfo.Load: Boolean;
 begin
      FolderList.Clear;
-     Index := 0;
 
      if not FileExists(TreeFile) then begin
         Exit(False);
@@ -110,29 +100,21 @@ procedure TTreeInfo.Rescan;
 begin
      Write(stderr, 'Rescaning Tree ... ');
      FolderList.Clear;
-     Index := 0;
      RecurseTree(RootDir);
      FolderList.Sort;
-     Save;
      Write(stderr, #13); ClrEol;
-end;
-
-function TTreeInfo.StartSearch(Path: String): Boolean;
-var Pos: Integer;
-begin
-     if (FolderList.Find(Path, Pos)) then begin
-       Index := Pos;
-       Exit(True);
-     end;
-     Exit(False);
+     Save;
 end;
 
 function TTreeInfo.Search(FolderToFind: String): String;
 var S: String;
 begin
-     S := Find(FolderToFind, 0);
-     if S = '' then s := Find(FolderToFind, 1);
-     if S = '' then s := Find(FolderToFind, 2);
+     if (FolderToFind = '') then begin
+        Exit('');
+     end;
+     S := Find(FolderToFind, MODE_EXACT);
+     if S = '' then S := Find(FolderToFind, MODE_PARTIAL);
+     if S = '' then S := Find(FolderToFind, MODE_BRUTE_FORCE);
      Exit(S);
 end;
 
@@ -140,36 +122,38 @@ function TTreeInfo.Match(Name, Path: String; mode: Byte): Boolean;
 begin
      Path := ExtractFileName(Path);
      case mode of
-          0 : Match := (Name = Path);
-          1 : Match := (Name = Copy(Path, 1, Length(Name)));
+          MODE_EXACT:
+            Match := (Name = Path);
+          MODE_PARTIAL:
+            Match := (Name = Copy(Path, 1, Length(Name)));
      end;
 end;
 
 function TTreeInfo.Find(Name: String; mode: Integer): String;
-var s      : String;
+var S: String;
     Start: Integer;
+    Index: Integer;
 begin
-     if (Name = '') then begin
-        Exit('');
-     end;
-     if mode = 2 then begin
+     if mode = MODE_BRUTE_FORCE then begin
        repeat
-             delete(Name, length(Name), 1);
-             s := Find(Name, 1);
-       until (s <> '') or (length(Name) = 0);
-       Exit(s);
+             SetLength(Name, Length(Name)-1);
+             S := Find(Name, MODE_PARTIAL);
+       until (S <> '') or (Length(Name) = 0);
+       Exit(S);
      end;
 
-     if not StartSearch(CurrentDir) then begin
-       Rescan;
+     if not FolderList.Find(CurrentDir, Start) then begin
+       Start := 0;
      end;
 
-     if not Match(Name, FolderList[Index], mode) then Index := 0;
-     Start := Index;
+     Index := Start;
      repeat
-           Next;
+           Inc(Index);
+           if (Index = FolderList.Count) then begin
+               Index := 0;
+           end;
      until Match(Name, FolderList[Index], mode) or (Start = Index);
-     if Name = DirectorySeparator then Name := '';
+
      if Match(Name, FolderList[Index], mode) then begin
          Exit(FolderList[Index]);
      end;
