@@ -22,7 +22,7 @@ type
    FolderList: TStringList;
    procedure RecurseTree(Path : AnsiString);
    function Match(Name, Path : String; mode : Byte) : Boolean;
-   function Find(Name : String; mode : Integer) : String;
+   function Find(Name : String; Mode : Integer; Start : Integer) : String;
  public
    constructor Create(ARootDir: String; ACurrentDir: String);
    procedure Add(path: String);
@@ -108,13 +108,19 @@ end;
 
 function TTreeInfo.Search(FolderToFind: String): String;
 var S: String;
+    Start: Integer;
 begin
      if (FolderToFind = '') then begin
         Exit('');
      end;
-     S := Find(FolderToFind, MODE_EXACT);
-     if S = '' then S := Find(FolderToFind, MODE_PARTIAL);
-     if S = '' then S := Find(FolderToFind, MODE_BRUTE_FORCE);
+     if not FolderList.Find(CurrentDir, Start) then begin
+       Start := 0;
+     end;
+
+
+     S := Find(FolderToFind, MODE_EXACT, Start);
+     if S = '' then S := Find(FolderToFind, MODE_PARTIAL, Start);
+     if S = '' then S := Find(FolderToFind, MODE_BRUTE_FORCE, Start);
      Exit(S);
 end;
 
@@ -129,21 +135,16 @@ begin
      end;
 end;
 
-function TTreeInfo.Find(Name: String; mode: Integer): String;
+function TTreeInfo.Find(Name: String; Mode: Integer; Start: Integer): String;
 var S: String;
-    Start: Integer;
     Index: Integer;
 begin
-     if mode = MODE_BRUTE_FORCE then begin
+     if Mode = MODE_BRUTE_FORCE then begin
        repeat
              SetLength(Name, Length(Name)-1);
-             S := Find(Name, MODE_PARTIAL);
+             S := Find(Name, MODE_PARTIAL, Start);
        until (S <> '') or (Length(Name) = 0);
        Exit(S);
-     end;
-
-     if not FolderList.Find(CurrentDir, Start) then begin
-       Start := 0;
      end;
 
      Index := Start;
@@ -152,9 +153,9 @@ begin
            if (Index = FolderList.Count) then begin
                Index := 0;
            end;
-     until Match(Name, FolderList[Index], mode) or (Start = Index);
+     until Match(Name, FolderList[Index], Mode) or (Start = Index);
 
-     if Match(Name, FolderList[Index], mode) then begin
+     if Match(Name, FolderList[Index], Mode) then begin
          Exit(FolderList[Index]);
      end;
 
