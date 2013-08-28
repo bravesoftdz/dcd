@@ -20,6 +20,7 @@ type
    RootDir: String;
    CurrentDir: String;
    FolderList: TStringList;
+   function IsUnderRootDir: Boolean;
    procedure RecurseTree(Path : AnsiString);
    function Match(Name, Path : String; mode : Byte) : Boolean;
    function Find(Name : String; Mode : Integer; Start : Integer) : String;
@@ -106,6 +107,11 @@ begin
      Save;
 end;
 
+function TTreeInfo.IsUnderRootDir: Boolean;
+begin
+     Result := Pos(RootDir, CurrentDir) = 1;
+end;
+
 function TTreeInfo.Search(FolderToFind: String): String;
 var S: String;
     Start: Integer;
@@ -113,14 +119,15 @@ begin
      if (FolderToFind = '') then begin
         Exit('');
      end;
-     if not FolderList.Find(CurrentDir, Start) then begin
-       Start := 0;
+     if not FolderList.Find(CurrentDir, Start) and IsUnderRootDir then begin
+        FolderList.Insert(Start, CurrentDir);
+        Save;
      end;
-
 
      S := Find(FolderToFind, MODE_EXACT, Start);
      if S = '' then S := Find(FolderToFind, MODE_PARTIAL, Start);
      if S = '' then S := Find(FolderToFind, MODE_BRUTE_FORCE, Start);
+
      Exit(S);
 end;
 
