@@ -1,13 +1,13 @@
-##DCD
+## DCD
 
-###Yet Another Fast Change Directory based on the honorable NCD
+### Yet Another Fast Change Directory based on the honorable NCD
 
 DCD was modeled after Norton Change Directory (NCD). NCD appeared first in The Norton Utilities, Release 4, for DOS in 1987, published by Peter Norton. NCD was written by Brad Kingsbury.
 
 This is a very old program I wrote for MS-DOS, and now I ported it to Mac OS X using FPC/Lazarus. 
 Maybe in the near future I'll make it multi-platform.
 
-###INSTALLATION
+### INSTALLATION
 
 * Compile it with fpc (http://www.freepascal.org):
 
